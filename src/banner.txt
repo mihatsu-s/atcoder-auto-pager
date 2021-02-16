@@ -1,0 +1,22 @@
+// ==UserScript==
+// @name         AtCoder Standings Quick Pager
+// @namespace    https://github.com/mihatsu-s/
+// @version      1.0
+// @description  Support finding a page on AtCoder standings
+// @author       Mihatsu
+// @license      MIT
+// @supportURL   https://github.com/mihatsu-s/atcoder-standings-quick-pager/issues
+// @match        https://atcoder.jp/contests/*/standings
+// @match        https://atcoder.jp/contests/*/standings?*
+// @match        https://atcoder.jp/contests/*/standings/
+// @match        https://atcoder.jp/contests/*/standings/?*
+// @match        https://atcoder.jp/contests/*/standings/virtual
+// @match        https://atcoder.jp/contests/*/standings/virtual?*
+// @match        https://atcoder.jp/contests/*/standings/virtual/
+// @match        https://atcoder.jp/contests/*/standings/virtual/?*
+// @match        https://atcoder.jp/contests/*/results
+// @match        https://atcoder.jp/contests/*/results?*
+// @match        https://atcoder.jp/contests/*/results/
+// @match        https://atcoder.jp/contests/*/results/?*
+// @exclude      https://atcoder.jp/*/json
+// ==/UserScript==

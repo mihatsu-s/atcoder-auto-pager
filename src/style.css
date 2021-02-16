@@ -1,0 +1,21 @@
+#vue-standings thead th {
+    vertical-align: middle;
+}
+
+.quick-pager-input {
+    width: 100%;
+    font-size: 80%;
+    font-weight: normal;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+}
+
+.quick-pager-input.error {
+    background-color: #fcc;
+}
+
+.quick-pager-input.active {
+    background-color: #cfc;
+    border-color: #6c6;
+    color: #093;
+}
