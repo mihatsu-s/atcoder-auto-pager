@@ -15,6 +15,7 @@ interface AtCoderVueStandings {
     };
     readonly filteredStandings: ReadonlyArray<AtCoderStandingsEntry>;
     readonly orderedStandings: ReadonlyArray<AtCoderStandingsEntry>;
+    readonly currentStandings: ReadonlyArray<AtCoderStandingsEntry>;
 
     orderBy: string;
     desc: boolean;

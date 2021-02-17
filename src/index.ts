@@ -1,9 +1,9 @@
 import "./style.css";
 import { asyncQuerySelector, waitForVueJsNextTick } from "./lib/dom-util";
-import { binarySearch } from "./lib/math-util"
+import { binarySearch, linearPrediction } from "./lib/math-util"
 import { observeProperties } from "./lib/general-util";
 import { getTaskScore } from "./lib/atcoder/get-task-score";
-import { TaskInfo, TextToOrderingTarget } from "./feature/text-to-ordering-target";
+import { TaskInfo, TextToOrderingTarget, textToNumber } from "./feature/text-to-ordering-target";
 
 namespace CLASS_NAMES {
     export const input = "auto-pager-input";
@@ -213,33 +213,41 @@ type PaginationRule =
             }
         });
 
+        if (rule.type === "ac-predictor" && __perfInputState) {
+            input.focus();
+            input.value = __perfInputState.value;
+            input.selectionStart = __perfInputState.selectionStart;
+            input.selectionEnd = __perfInputState.selectionEnd;
+            input.classList.add(CLASS_NAMES.active);
+            __perfInputState = null;
+        }
+
     }
 
 
     async function execPagerFromInputElement(input: HTMLInputElement, rule: PaginationRule) {
         if (input.value.replace(/\s/g, "") === "") return;
 
-        clearCssOfPagers();
-
         try {
-            await execPager(input.value, rule);
             input.classList.add(CLASS_NAMES.active);
+            await execPager(input.value, rule, input);
         } catch (e) {
             console.error(e instanceof Error ? e.message : e);
+            input.classList.remove(CLASS_NAMES.active)
             input.classList.add(CLASS_NAMES.error);
         }
     }
 
 
-    async function execPager(text: string, rule: PaginationRule) {
+    async function execPager(text: string, rule: PaginationRule, inputElement: HTMLInputElement) {
 
         if (rule.type === "standings-order") {
 
             const target = rule.textToOrderingTarget(text, vueStandings.desc, getTaskInfo());
 
             if (vueStandings.orderBy !== rule.orderBy) {
-                preventReseting();
                 vueStandings.orderBy = rule.orderBy;
+                vueStandings.desc = false;
             }
 
             const array = vueStandings.orderedStandings;
@@ -254,8 +262,8 @@ type PaginationRule =
             const target = rule.textToOrderingTarget(text, vueResults.desc);
 
             if (vueResults.orderBy !== rule.orderBy) {
-                preventReseting();
                 vueResults.orderBy = rule.orderBy;
+                vueStandings.desc = false;
             }
 
             const array = vueResults.orderedResults;
@@ -267,15 +275,123 @@ type PaginationRule =
 
         } else if (rule.type === "ac-predictor") {
 
-            throw new Error("TODO");
-            
+            // DOM based searching
+
+            const rawTarget = textToNumber(text);
+
+            let reordered = false;
+            if (vueStandings.orderBy !== "rank") {
+                vueStandings.orderBy = "rank";
+                vueStandings.desc = false;
+                reordered = true;
+                keepPerfInputState(inputElement);
+            }
+
+            const desc = vueStandings.desc;
+            const target = rawTarget * (desc ? 1 : -1);  // perf values are always ascending order
+
+            let columnNumber = -1;
+            headerRow.querySelectorAll("th").forEach((th, i) => {
+                if (th.textContent.replace(/\s/g, "") === "perf") {
+                    columnNumber = i;
+                }
+            });
+            if (columnNumber < 0) throw new Error('Cannot find perf column');
+
+            const tbody = document.querySelector("#standings-tbody");
+
+
+            function readPerfFromTableCell(cell: Node): number {
+                const text = cell.textContent.replace(/\s/g, "");
+                const value = Number(text);
+                return (isNaN(value) ? 0 : value) * (desc ? 1 : -1);
+            }
+
+
+            function readCurrentPagePerf(): [number, number] {
+
+                let rows: NodeListOf<HTMLTableRowElement>;
+                const infoRow: HTMLTableRowElement | null = tbody.querySelector("tr.info");
+                const warningRow: HTMLTableRowElement | null = tbody.querySelector("tr.warning");
+                if (vueStandings.currentStandings.length > vueStandings.perPage
+                    || vueStandings.page === vueStandings.pages) {
+                    if (infoRow && warningRow) {
+                        rows = tbody.querySelectorAll("tr:not(.info,.standings-fa,.standings-statistics)");
+                    } else {
+                        rows = tbody.querySelectorAll("tr:not(.info,.warning,.standings-fa,.standings-statistics)");
+                    }
+                } else {
+                    rows = tbody.querySelectorAll("tr:not(.standings-fa,.standings-statistics)");
+                }
+
+                return [rows[0], rows[rows.length - 1]].map(
+                    row => readPerfFromTableCell(row.children[columnNumber])
+                ) as [number, number];
+
+            }
+
+
+            if (reordered) await waitForVueJsNextTick();
+
+            // Search page binarily
+
+            let low: { page: number, value: number } | null = null;
+            let high: { page: number, value: number } | null = null;
+            while (true) {
+                const [v0, v1] = readCurrentPagePerf();
+
+                if (v0 < target && target <= v1) {
+                    break;
+                } else if (target <= v0) {
+                    // too high
+                    if (vueStandings.page === 1) break;
+                    high = { page: vueStandings.page, value: (v0 + v1) / 2 };
+                } else {
+                    // too low
+                    if (vueStandings.page === vueStandings.pages) break;
+                    low = { page: vueStandings.page, value: (v0 + v1) / 2 };
+                }
+
+                let nextPage: number;
+                let endNext = false;
+
+                if (high && low) {
+                    if (high.page - low.page <= 1) {
+                        // goal
+                        nextPage = high.page;
+                        endNext = true;
+                    } else if (/* v0 !== v1 */ false) {
+                        // Use linear prediction
+                        nextPage = Math.floor(linearPrediction(low.value, low.page, high.value, high.page, target) + 0.5);
+                    } else {
+                        // Use midpoint
+                        nextPage = Math.ceil((high.page + low.page) / 2);
+                    }
+
+                    if (nextPage >= high.page) {
+                        nextPage = high.page - 1;
+                    } else if (nextPage <= low.page) {
+                        nextPage = low.page + 1;
+                    }
+                } else if (high) {
+                    nextPage = 1;
+                } else if (low) {
+                    nextPage = vueStandings.pages;
+                }
+
+                if (nextPage !== vueObject.page) {
+                    keepPerfInputState(inputElement);
+                    await goToPage(nextPage);
+                }
+                if (endNext) break;
+            }
+
         }
 
     }
 
 
     async function goToPage(page: number) {
-        preventReseting();
         if (page === vueObject.page) return;
         vueObject.page = page;
         vueObject.watchIndex = -1;
@@ -283,10 +399,22 @@ type PaginationRule =
     }
 
 
-    function clearCssOfPagers() {
-        for (const input of headerRow.querySelectorAll("." + CLASS_NAMES.input) as NodeListOf<HTMLElement>) {
+    let __perfInputState: { value: string, selectionStart: number, selectionEnd: number } | null = null;
+    function keepPerfInputState(input: HTMLInputElement) {
+        __perfInputState = {
+            value: input.value,
+            selectionStart: input.selectionStart,
+            selectionEnd: input.selectionEnd,
+        };
+    }
+
+
+    function resetPagers() {
+        for (const input of headerRow.querySelectorAll("." + CLASS_NAMES.input) as NodeListOf<HTMLInputElement>) {
+            if (input.ownerDocument.activeElement === input) continue;
             input.classList.remove(CLASS_NAMES.active);
             input.classList.remove(CLASS_NAMES.error);
+            input.value = "";
         }
     }
 
@@ -314,18 +442,9 @@ type PaginationRule =
 
 
     // Detect update and clear CSS of auto-pager
-    let __updatedByThisProgram = false;
     observeProperties(vueObject, ["page", "orderBy", "desc"], onResetTriggered);
     function onResetTriggered() {
-        console.log("!");
-        if (__updatedByThisProgram) {
-            __updatedByThisProgram = false;
-        } else {
-            clearCssOfPagers();
-        }
-    }
-    function preventReseting() {
-        __updatedByThisProgram = true;
+        resetPagers();
     }
 
 })();

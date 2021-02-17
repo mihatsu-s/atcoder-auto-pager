@@ -6,7 +6,7 @@ export interface TaskInfo {
 }
 
 
-function textToNumber(text: string) {
+export function textToNumber(text: string) {
     let value = NaN;
     if (!text.match(/^,|,$|,,|\..*,|[eE].*,|,.*[eE]/)) {
         value = Number(text.replace(/,/g, ""));
