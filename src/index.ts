@@ -1,301 +1,331 @@
 import "./style.css";
+import { asyncQuerySelector, waitForVueJsNextTick } from "./lib/dom-util";
+import { binarySearch } from "./lib/math-util"
+import { observeProperties } from "./lib/general-util";
+import { getTaskScore } from "./lib/atcoder/get-task-score";
+import { TaskInfo, TextToOrderingTarget } from "./feature/text-to-ordering-target";
 
-import * as Compare from "./modules/compare";
-import * as StandingsReader from "./modules/atcoder-standings-reader";
-
-function sleep(time: number) {
-    return new Promise(resolve => setTimeout(resolve, time));
+namespace CLASS_NAMES {
+    export const input = "auto-pager-input";
+    export const active = "active";
+    export const error = "error";
 }
 
-async function asyncQuerySelector(selectors: string): Promise<Element> {
-    while (true) {
-        const result = document.querySelector(selectors);
-        if (result) return result;
-        await sleep(200);
-    }
-}
+type TableType = "standings" | "results";
 
-function waitForHTMLElementUpdated(target: HTMLElement, options?: MutationObserverInit): Promise<MutationRecord[]> {
-    return new Promise((resolve, reject) => {
-        const observer = new MutationObserver(mutations => {
-            observer.disconnect();
-            resolve(mutations);
-        });
-        observer.observe(target, options);
-    });
-}
-
-const inputClassName = "auto-pager-input";
-
-interface OrderingRule {
-    orderingTarget: HTMLElement;
-    inputTextToValue: (text: string, columnInfo?: any) => Compare.Comparable;
-    tableDataToValue: (node: Node, descending?: boolean) => Compare.Comparable;
-    columnInfo?: any;
-};
-
-
-// main
+type PaginationRule =
+    (
+        {
+            type: "standings-order",
+            orderBy: string,
+            textToOrderingTarget: (text: string, desc: boolean, taskInfo: TaskInfo) => AtCoderStandingsEntry,
+        } |
+        {
+            type: "results-order",
+            orderBy: string,
+            textToOrderingTarget: (text: string, desc: boolean) => AtCoderResultsEntry,
+        } |
+        { type: "ac-predictor" }
+    );
 
 (async () => {
-    const table = (await Promise.all([
-        asyncQuerySelector("#vue-standings table,#vue-results table"),
-        StandingsReader.waitForFetchingPointValues(),
-    ]))[0];
-    const headerLine: HTMLTableRowElement = table.querySelector("thead tr");
-    const tbody = table.querySelector("tbody");
-    const pagenationPanel = document.querySelector("ul.pagination") as HTMLUListElement;
 
-    const isStandingsPage = !!document.querySelector("#vue-standings");
-    const mutationObserverTarget = tbody;
-    const mutationObserverOption: MutationObserverInit =
-        isStandingsPage ? { childList: true } : { childList: true, characterData: true, subtree: true };
+    const getTaskInfo = (() => {
 
-    let rankColumn: HTMLElement;
+        let cache: TaskInfo | null = null;
+        let previousStandings: AtCoderVueStandings["standings"] | null = null;
 
-    // Keep state of input element at Perf column when the column is reconstructed
-    let perfInputState: { text: string, selectionStart: number, selectionEnd: number, active: boolean } | null = null;
-    function writePerfInputState(input: HTMLInputElement) {
-        perfInputState = {
-            text: input.value,
-            selectionStart: input.selectionStart,
-            selectionEnd: input.selectionEnd,
-            active: [...input.classList].some(t => t === "active"),
-        };
-    }
+        let maximumScoreRecord: {
+            [taskAlphabet: string]: number | null // null means "attemted and failed to get the score already"
+        } = {};
 
-    function initColumn(th: HTMLElement) {
-
-        let orderingRule: OrderingRule | null = null;
-        let isPerf = false;
-
-        const title = th.textContent.replace(/\s/g, "");
-        if (title === "順位" || title === "Rank") {
-            rankColumn = th;
-            orderingRule = {
-                orderingTarget: th,
-                inputTextToValue: StandingsReader.readTextAsRank,
-                tableDataToValue: StandingsReader.readRank,
-            };
-        } else if (title === "得点" || title === "Score") {
-            orderingRule = {
-                orderingTarget: th,
-                inputTextToValue: StandingsReader.readTextAsScore,
-                tableDataToValue: StandingsReader.readScore,
-            };
-        } else if (title.match(/^[A-Z]$/)) {
-            orderingRule = {
-                orderingTarget: th,
-                inputTextToValue: StandingsReader.readTextAsScore,
-                tableDataToValue: StandingsReader.readScore,
-                columnInfo: title,
-            };
-        } else if (title === "perf") {
-            isPerf = true;
-            orderingRule = {
-                orderingTarget: rankColumn,
-                inputTextToValue: StandingsReader.readTextAsPerf,
-                tableDataToValue: StandingsReader.readPerf,
-            }
-        } else if (
-            title === "パフォーマンス" || title === "Performance"
-            || title === "旧Rating" || title === "OldRating"
-            || title === "差分" || title === "Diff"
-            || title === "新Rating" || title === "NewRating"
-        ) {
-            orderingRule = {
-                orderingTarget: th,
-                inputTextToValue: StandingsReader.readTextAsPerf,
-                tableDataToValue: StandingsReader.readPerf,
-            }
-        }
-
-        if (!orderingRule) return;
-
-
-        const inputContainer = document.createElement("div");
-        const input = document.createElement("input");
-        input.classList.add(inputClassName);
-        inputContainer.append(input);
-        th.append(inputContainer);
-
-        if (isPerf && perfInputState) {
-            input.focus();
-            input.value = perfInputState.text;
-            input.selectionStart = perfInputState.selectionStart;
-            input.selectionEnd = perfInputState.selectionEnd;
-            if (perfInputState.active) input.classList.add("active");
-            perfInputState = null;
-        }
-
-        async function runAutoPager() {
-            if (input.value.replace(/\s/g, "") === "") return;
-
-            const orderingTargetClassNames = [...orderingRule.orderingTarget.classList];
-            const orderingTargetAscending = orderingTargetClassNames.some(t => t === "sort-asc");
-            const orderingTargetDescending = orderingTargetClassNames.some(t => t === "sort-desc");
-
-            let targetValue: Compare.Comparable;
+        async function getAndRecordMaximumScore(taskAlphabet: string, taskScreenName: string) {
+            maximumScoreRecord[taskAlphabet] = null;
             try {
-                targetValue = orderingRule.inputTextToValue(input.value, orderingRule.columnInfo);
-                input.classList.remove("error");
-                input.classList.add("active");
-            } catch {
-                input.classList.remove("active");
-                input.classList.add("error");
-                return;
+                const url = location.href.replace(/(?<=\/contests\/[^\/]*\/).*$/, "tasks/" + taskScreenName);
+                const score = (await getTaskScore(url)) * 100;
+                maximumScoreRecord[taskAlphabet] = score;
+                cache[taskAlphabet].maximumScore = score;
+            } catch (e) {
+                console.error(e instanceof Error ? e.message : e);
             }
-
-            cancelAutoPagination();
-            resetAllPager(input);
-
-            // Change the ordering of standings if needed
-            if (!orderingTargetAscending && !orderingTargetDescending) {
-                if (isPerf) writePerfInputState(input);
-                pagingByThisProgram = true;
-                orderingRule.orderingTarget.click();
-                await waitForHTMLElementUpdated(orderingRule.orderingTarget, { attributes: true });
-            }
-
-            let columnNumber = -1;
-            while (columnNumber < 0) {
-                headerLine.querySelectorAll("th,td").forEach((element, i) => {
-                    if (
-                        element === th
-                        || (isPerf && [...element.classList].some(t => t === "standings-perf"))
-                    ) columnNumber = i;
-                });
-            }
-
-            // paging
-            movePageBinarily(
-                () => {
-                    const entries = getStandingsEntries();
-                    if (entries.length === 0) return true;
-                    const entry = entries[entries.length - 1];
-                    const data = entry.querySelectorAll("th,td")[columnNumber];
-                    if (!data) return false;
-                    const currentPageValue = orderingRule.tableDataToValue(data, orderingTargetDescending);
-                    // console.log("target", targetValue, "currentPage", currentPageValue); // debug
-                    return (orderingTargetDescending ? Compare.le : Compare.ge)(currentPageValue, targetValue);
-                },
-                isPerf ? (() => writePerfInputState(input)) : undefined
-            );
         }
 
-        input.addEventListener("click", e => e.stopPropagation());
-        input.addEventListener("input", () => {
-            input.classList.remove("active");
-            input.classList.remove("error");
-            // runAutoPager();
-        });
-        input.addEventListener("keypress", e => {
-            if (e.key === "Enter") {
-                runAutoPager();
-            }
-        });
-    }
+        function generateTaskInfo(standings: AtCoderVueStandings["standings"]): TaskInfo {
+            const result: TaskInfo = {};
+            for (const info of standings.TaskInfo) {
+                const alphabet = info.Assignment;
+                const screenName = info.TaskScreenName;
 
-    function getStandingsEntries() {
-        return [...tbody.querySelectorAll("tr:not(.info,.warning,.standings-fa,.standings-statistics)")];
-    }
+                let maximumScore = 0;
+                if (alphabet in maximumScoreRecord && maximumScoreRecord[alphabet] !== null) {
+                    maximumScore = maximumScoreRecord[alphabet];
+                } else {
+                    if (!(alphabet in maximumScoreRecord)) {
+                        // Do not wait (request only)
+                        getAndRecordMaximumScore(alphabet, screenName);
+                    }
 
-    /**
-     * Go to the first page that meets the given condition.
-     * @param condition Condition must have monotonicity (false at first page and true at last one).
-     */
-    async function movePageBinarily(condition: () => boolean, beforePaging?: Function) {
-        let canceled = false;
-        autoPaginationCancelFunction = () => canceled = true;
-
-        let currentPage = Number(pagenationPanel.querySelector(".active").textContent);
-        let low = 0, high = Number(pagenationPanel.querySelector("li:last-child").textContent);
-
-        async function clickPaginationButton(element: HTMLElement) {
-            if (beforePaging) beforePaging();
-            pagingByThisProgram = true;
-            currentPage = Number(element.textContent);
-            element.click();
-            await waitForHTMLElementUpdated(mutationObserverTarget, mutationObserverOption);
-        }
-
-        while (high - low > 1) {
-            if (canceled) return;
-
-            // Update search range
-            if (condition()) high = currentPage; else low = currentPage;
-            
-            // Select next page
-            const idealNextPage = (low + high) / 2;
-            let clickElement: HTMLElement | null = null;
-            let clickElementScore = -Infinity;
-            const candidates = pagenationPanel.querySelectorAll("li:not(.active)");
-            for (const li of candidates) {
-                const pageNumber = Number(li.textContent);
-                if (low < pageNumber && pageNumber < high) {
-                    const score = -Math.abs(pageNumber - idealNextPage);
-                    if (score > clickElementScore) {
-                        clickElementScore = score;
-                        clickElement = li.querySelector("a");
+                    for (const entry of standings.StandingsData) {
+                        const taskResults = entry.TaskResults;
+                        if (screenName in taskResults) {
+                            maximumScore = Math.max(maximumScore, taskResults[screenName].Score);
+                        }
                     }
                 }
-            }
 
-            if (clickElement) {
-                await clickPaginationButton(clickElement);
-            } else {
-                break;
+                result[alphabet] = { screenName, maximumScore };
             }
+            return result;
         }
 
-        // Go to "high"(true) page
-        if (currentPage === low) {
-            for (const a of pagenationPanel.querySelectorAll("a")) {
-                if (Number(a.textContent) === high) {
-                    await clickPaginationButton(a);
-                    break;
+        return () => {
+            const currentStandings = vueStandings.standings;
+            // Check if standings has been updated
+            if (cache && currentStandings === previousStandings) return cache;
+            previousStandings = currentStandings;
+            return cache = generateTaskInfo(currentStandings);
+        };
+
+    })();
+
+
+    function getPaginationRuleFromHeaderCell(headerCell: HTMLElement): PaginationRule | null {
+
+        const title = headerCell.textContent.replace(/\s/g, "");
+
+        if (tableType === "results") {
+
+            if (title === "順位" || title === "Rank") {
+                return {
+                    type: "results-order",
+                    orderBy: "Place",
+                    textToOrderingTarget: TextToOrderingTarget.Results.numeric("Place"),
+                };
+            }
+
+            if (title === "パフォーマンス" || title === "Performance") {
+                return {
+                    type: "results-order",
+                    orderBy: "Performance",
+                    textToOrderingTarget: TextToOrderingTarget.Results.numeric("Performance"),
+                };
+            }
+
+            if (title === "旧Rating" || title === "OldRating") {
+                return {
+                    type: "results-order",
+                    orderBy: "OldRating",
+                    textToOrderingTarget: TextToOrderingTarget.Results.numeric("OldRating"),
+                };
+            }
+
+            if (title === "差分" || title === "Diff") {
+                return {
+                    type: "results-order",
+                    orderBy: "Difference",
+                    textToOrderingTarget: TextToOrderingTarget.Results.numeric("Difference"),
+                };
+            }
+
+            if (title === "新Rating" || title === "NewRating") {
+                return {
+                    type: "results-order",
+                    orderBy: "NewRating",
+                    textToOrderingTarget: TextToOrderingTarget.Results.numeric("NewRating"),
+                };
+            }
+
+        } else {
+
+            if (title === "順位" || title === "Rank") {
+                return {
+                    type: "standings-order",
+                    orderBy: "rank",
+                    textToOrderingTarget: TextToOrderingTarget.Standings.numeric("Rank"),
+                };
+            }
+
+            if (title === "得点" || title === "Score") {
+                return {
+                    type: "standings-order",
+                    orderBy: "score",
+                    textToOrderingTarget: TextToOrderingTarget.Standings.score(null),
+                };
+            }
+
+            const taskInfo = getTaskInfo();
+
+            for (const taskAlphabet in taskInfo) {
+                if (title === taskAlphabet) {
+                    return {
+                        type: "standings-order",
+                        orderBy: "task-" + taskInfo[taskAlphabet].screenName,
+                        textToOrderingTarget: TextToOrderingTarget.Standings.score(taskAlphabet),
+                    };
                 }
             }
+
+            if (title === "perf") {
+                return { type: "ac-predictor" };
+            }
+
         }
+
+        return null;
     }
 
-    let autoPaginationCancelFunction: Function | null = null;
-    function cancelAutoPagination() {
-        if (autoPaginationCancelFunction) {
-            autoPaginationCancelFunction();
-            autoPaginationCancelFunction = null;
-        }
+
+    function addInputElementToHeaderCell(headerCell: HTMLElement) {
+        const document = headerCell.ownerDocument;
+
+        const div = document.createElement("div");
+        const input = document.createElement("input");
+        div.append(input);
+        headerCell.append(div);
+
+        input.classList.add(CLASS_NAMES.input);
+
+        input.addEventListener("click", e => {
+            e.stopPropagation();
+        });
+
+        return input;
     }
 
-    function resetAllPager(exclude?: HTMLElement) {
-        headerLine.querySelectorAll("." + inputClassName).forEach((elm: HTMLInputElement) => {
-            if (elm !== exclude) {
-                elm.value = "";
-                elm.classList.remove("active");
-                elm.classList.remove("error");
+
+    function columnInit(headerCell: HTMLElement) {
+
+        const rule = getPaginationRuleFromHeaderCell(headerCell);
+        if (rule === null) return;
+
+        const input = addInputElementToHeaderCell(headerCell);
+
+        input.addEventListener("input", async () => {
+            input.classList.remove(CLASS_NAMES.active);
+            input.classList.remove(CLASS_NAMES.error);
+            await execPagerFromInputElement(input, rule);
+        });
+
+        input.addEventListener("keypress", async e => {
+            if (e.code === "Enter") {
+                await execPagerFromInputElement(input, rule);
             }
         });
+
     }
 
+
+    async function execPagerFromInputElement(input: HTMLInputElement, rule: PaginationRule) {
+        if (input.value.replace(/\s/g, "") === "") return;
+
+        clearCssOfPagers();
+
+        try {
+            await execPager(input.value, rule);
+            input.classList.add(CLASS_NAMES.active);
+        } catch (e) {
+            console.error(e instanceof Error ? e.message : e);
+            input.classList.add(CLASS_NAMES.error);
+        }
+    }
+
+
+    async function execPager(text: string, rule: PaginationRule) {
+
+        if (rule.type === "standings-order") {
+
+            const target = rule.textToOrderingTarget(text, vueStandings.desc, getTaskInfo());
+
+            if (vueStandings.orderBy !== rule.orderBy) {
+                preventReseting();
+                vueStandings.orderBy = rule.orderBy;
+            }
+
+            const array = vueStandings.orderedStandings;
+            const index = Math.min(
+                binarySearch(vueStandings.comp, array, target),
+                array.length - 1
+            );
+            await goToPage(Math.floor(index / vueStandings.perPage) + 1);
+
+        } else if (rule.type === "results-order") {
+
+            const target = rule.textToOrderingTarget(text, vueResults.desc);
+
+            if (vueResults.orderBy !== rule.orderBy) {
+                preventReseting();
+                vueResults.orderBy = rule.orderBy;
+            }
+
+            const array = vueResults.orderedResults;
+            const index = Math.min(
+                binarySearch(vueResults.comp, array, target),
+                array.length - 1
+            );
+            await goToPage(Math.floor(index / vueResults.perPage) + 1);
+
+        } else if (rule.type === "ac-predictor") {
+
+            throw new Error("TODO");
+            
+        }
+
+    }
+
+
+    async function goToPage(page: number) {
+        preventReseting();
+        if (page === vueObject.page) return;
+        vueObject.page = page;
+        vueObject.watchIndex = -1;
+        await waitForVueJsNextTick();
+    }
+
+
+    function clearCssOfPagers() {
+        for (const input of headerRow.querySelectorAll("." + CLASS_NAMES.input) as NodeListOf<HTMLElement>) {
+            input.classList.remove(CLASS_NAMES.active);
+            input.classList.remove(CLASS_NAMES.error);
+        }
+    }
+
+
+    // main
+
+    const headerRow = await asyncQuerySelector("#vue-standings thead tr, #vue-results thead tr");
+
+    const tableType: TableType = typeof vueStandings === "undefined" ? "results" : "standings";
+
+    // Prepare the task info 
+    if (tableType === "standings") getTaskInfo();
+
+    const vueObject = tableType === "standings" ? vueStandings : vueResults;
+
     // Launch auto-pager for each column
-    headerLine.childNodes.forEach(node => node instanceof HTMLElement && initColumn(node));
+    headerRow.querySelectorAll("th").forEach(columnInit);
     new MutationObserver(mutations => {
         for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
-                if (node instanceof HTMLElement) initColumn(node);
+                if (node instanceof HTMLElement) columnInit(node);
             }
         }
-    }).observe(headerLine, { childList: true });
+    }).observe(headerRow, { childList: true });
 
-    // When page changed manually, reset all auto-pager
-    let pagingByThisProgram = false;
-    new MutationObserver(() => {
-        if (pagingByThisProgram) {
-            pagingByThisProgram = false;
+
+    // Detect update and clear CSS of auto-pager
+    let __updatedByThisProgram = false;
+    observeProperties(vueObject, ["page", "orderBy", "desc"], onResetTriggered);
+    function onResetTriggered() {
+        console.log("!");
+        if (__updatedByThisProgram) {
+            __updatedByThisProgram = false;
         } else {
-            cancelAutoPagination();
-            resetAllPager();
+            clearCssOfPagers();
         }
-    }).observe(mutationObserverTarget, mutationObserverOption);
+    }
+    function preventReseting() {
+        __updatedByThisProgram = true;
+    }
 
 })();
