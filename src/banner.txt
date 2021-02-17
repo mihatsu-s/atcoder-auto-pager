@@ -1,11 +1,11 @@
 // ==UserScript==
-// @name         AtCoder Standings Quick Pager
+// @name         AtCoder Auto Pager
 // @namespace    https://github.com/mihatsu-s/
 // @version      1.0
 // @description  Support finding a page on AtCoder standings
 // @author       Mihatsu
 // @license      MIT
-// @supportURL   https://github.com/mihatsu-s/atcoder-standings-quick-pager/issues
+// @supportURL   https://github.com/mihatsu-s/atcoder-auto-pager/issues
 // @match        https://atcoder.jp/contests/*/standings
 // @match        https://atcoder.jp/contests/*/standings?*
 // @match        https://atcoder.jp/contests/*/standings/

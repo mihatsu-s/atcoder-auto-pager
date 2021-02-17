@@ -25,7 +25,7 @@ function waitForHTMLElementUpdated(target: HTMLElement, options?: MutationObserv
     });
 }
 
-const inputClassName = "quick-pager-input";
+const inputClassName = "auto-pager-input";
 
 interface OrderingRule {
     orderingTarget: HTMLElement;
@@ -128,7 +128,7 @@ interface OrderingRule {
             perfInputState = null;
         }
 
-        async function runQuickPager() {
+        async function runAutoPager() {
             if (input.value.replace(/\s/g, "") === "") return;
 
             const orderingTargetClassNames = [...orderingRule.orderingTarget.classList];
@@ -187,11 +187,11 @@ interface OrderingRule {
         input.addEventListener("input", () => {
             input.classList.remove("active");
             input.classList.remove("error");
-            // runQuickPager();
+            // runAutoPager();
         });
         input.addEventListener("keypress", e => {
             if (e.key === "Enter") {
-                runQuickPager();
+                runAutoPager();
             }
         });
     }
@@ -277,7 +277,7 @@ interface OrderingRule {
         });
     }
 
-    // Launch quick-pager for each column
+    // Launch auto-pager for each column
     headerLine.childNodes.forEach(node => node instanceof HTMLElement && initColumn(node));
     new MutationObserver(mutations => {
         for (const mutation of mutations) {
@@ -287,7 +287,7 @@ interface OrderingRule {
         }
     }).observe(headerLine, { childList: true });
 
-    // When page changed manually, reset all quick-pager
+    // When page changed manually, reset all auto-pager
     let pagingByThisProgram = false;
     new MutationObserver(() => {
         if (pagingByThisProgram) {

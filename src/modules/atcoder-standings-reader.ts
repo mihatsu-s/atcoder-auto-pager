@@ -161,7 +161,7 @@ export async function waitForFetchingPointValues() {
 
     } catch (e) {
 
-        console.groupCollapsed("[atcoder-standings-quick-pager] Cannot get the point values of tasks.");
+        console.groupCollapsed("[atcoder-auto-pager] Cannot get the point values of tasks.");
         console.error(e);
         console.groupEnd();
 

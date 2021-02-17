@@ -1,5 +1,5 @@
 {
-  "name": "atcoder-standings-quick-pager",
+  "name": "atcoder-auto-pager",
   "version": "1.0.0",
   "description": "Support finding a page on AtCoder standings",
   "private": true,
@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com.mihatsu:mihatsu-s/atcoder-standings-quick-pager.git"
+    "url": "git@github.com.mihatsu:mihatsu-s/atcoder-auto-pager.git"
   },
   "author": "Mihatsu",
   "license": "MIT",

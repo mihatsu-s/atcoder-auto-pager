@@ -2,7 +2,7 @@
     vertical-align: middle;
 }
 
-.quick-pager-input {
+.auto-pager-input {
     width: 100%;
     font-size: 80%;
     font-weight: normal;
@@ -10,11 +10,11 @@
     border-radius: 2px;
 }
 
-.quick-pager-input.error {
+.auto-pager-input.error {
     background-color: #fcc;
 }
 
-.quick-pager-input.active {
+.auto-pager-input.active {
     background-color: #cfc;
     border-color: #6c6;
     color: #093;
