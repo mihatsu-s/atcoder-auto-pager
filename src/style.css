@@ -1,4 +1,4 @@
-#vue-standings thead th {
+#vue-standings thead th, #vue-results thead th {
     vertical-align: middle;
 }
 
