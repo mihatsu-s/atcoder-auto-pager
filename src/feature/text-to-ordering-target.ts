@@ -1,9 +1,4 @@
-export interface TaskInfo {
-    [taskAlphabet: string]: {
-        screenName: string;
-        maximumScore: number;
-    }
-}
+import { TaskInfo } from "./pager/standings-order";
 
 
 export function textToNumber(text: string) {
@@ -88,7 +83,7 @@ export namespace TextToOrderingTarget {
                 // set default value
                 let elapsed = desc ? -Infinity : Infinity; // most bottom
                 let point = 0;
-                if (taskAlphabet !== null) {
+                if (taskAlphabet !== null && taskAlphabet in taskInfo) {
                     point = taskInfo[taskAlphabet].maximumScore;
                 } else {
                     // sum of all tasks point
