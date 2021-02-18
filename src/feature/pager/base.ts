@@ -1,4 +1,10 @@
 export abstract class Pager {
+
+    constructor(
+        readonly paginationFn: (page: number) => Promise<unknown>,
+        readonly orderFn: (orderBy: string, desc?: boolean | null) => Promise<unknown>,
+    ) {}
+
     abstract exec(
         text: string,
         paginationFn: (page: number) => Promise<unknown>,

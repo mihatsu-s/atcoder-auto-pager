@@ -4,10 +4,12 @@ import { binarySearch } from "../../lib/math-util";
 export class ResultsOrderPager extends Pager {
 
     constructor(
+        readonly paginationFn: (page: number) => Promise<unknown>,
+        readonly orderFn: (orderBy: string, desc?: boolean | null) => Promise<unknown>,
         readonly orderBy: string,
         readonly textToOrderingTarget: (text: string, desc: boolean) => AtCoderResultsEntry,
     ) {
-        super();
+        super(paginationFn, orderFn);
     }
 
 
@@ -18,10 +20,7 @@ export class ResultsOrderPager extends Pager {
 
         const target = this.convertTargetText(this.textToOrderingTarget, text, vueResults.desc);
 
-        if (vueResults.orderBy !== this.orderBy) {
-            vueResults.orderBy = this.orderBy;
-            vueStandings.desc = false;
-        }
+        this.orderFn(this.orderBy);  // Do not wait for DOM updated
 
         const array = vueResults.orderedResults;
         const index = Math.min(

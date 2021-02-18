@@ -25,71 +25,101 @@ type TableType = "standings" | "results";
 
         if (tableType === "results") {
 
+            let rule: {
+                orderBy: string,
+                converter: (text: string, desc: boolean) => AtCoderResultsEntry,
+            } | null = null;
+
             if (title === "順位" || title === "Rank") {
-                return new ResultsOrderPager(
-                    "Place",
-                    TextToOrderingTarget.Results.numeric("Place"),
-                );
+                rule = {
+                    orderBy: "Place",
+                    converter: TextToOrderingTarget.Results.numeric("Place"),
+                };
             }
 
             if (title === "パフォーマンス" || title === "Performance") {
-                return new ResultsOrderPager(
-                    "Perfoemance",
-                    TextToOrderingTarget.Results.numeric("Place"),
-                );
+                rule = {
+                    orderBy: "Performance",
+                    converter: TextToOrderingTarget.Results.numeric("Performance"),
+                };
             }
 
             if (title === "旧Rating" || title === "OldRating") {
-                return new ResultsOrderPager(
-                    "OldRating",
-                    TextToOrderingTarget.Results.numeric("OldRating"),
-                );
+                rule = {
+                    orderBy: "OldRating",
+                    converter: TextToOrderingTarget.Results.numeric("OldRating"),
+                };
             }
 
             if (title === "差分" || title === "Diff") {
-                return new ResultsOrderPager(
-                    "Difference",
-                    TextToOrderingTarget.Results.numeric("Difference"),
-                );
+                rule = {
+                    orderBy: "Difference",
+                    converter: TextToOrderingTarget.Results.numeric("Difference"),
+                };
             }
 
             if (title === "新Rating" || title === "NewRating") {
+                rule = {
+                    orderBy: "NewRating",
+                    converter: TextToOrderingTarget.Results.numeric("NewRating"),
+                };
+            }
+
+            if (rule) {
                 return new ResultsOrderPager(
-                    "NewRating",
-                    TextToOrderingTarget.Results.numeric("NewRating"),
+                    goToPage,
+                    changeOrder,
+                    rule.orderBy,
+                    rule.converter,
                 );
             }
 
         } else {
 
+            let rule: {
+                orderBy: string,
+                converter: (text: string, desc: boolean, taskInfo: TaskInfo) => AtCoderStandingsEntry,
+            } | null = null;
+
             if (title === "順位" || title === "Rank") {
-                return new StandingsOrderPager(
-                    "rank",
-                    TextToOrderingTarget.Standings.numeric("Rank"),
-                    getTaskInfo,
-                );
+                rule = {
+                    orderBy: "rank",
+                    converter: TextToOrderingTarget.Standings.numeric("Rank"),
+                };
             }
 
             if (title === "得点" || title === "Score") {
-                return new StandingsOrderPager(
-                    "score",
-                    TextToOrderingTarget.Standings.score(null),
-                    getTaskInfo,
-                );
+                rule = {
+                    orderBy: "score",
+                    converter: TextToOrderingTarget.Standings.score(null),
+                };
             }
 
             const taskInfo = getTaskInfo();
 
             if (title in taskInfo) {
+                rule = {
+                    orderBy: "task-" + taskInfo[title].screenName,
+                    converter: TextToOrderingTarget.Standings.score(title),
+                };
+            }
+
+            if (rule) {
                 return new StandingsOrderPager(
-                    "task-" + taskInfo[title].screenName,
-                    TextToOrderingTarget.Standings.score(title),
+                    goToPage,
+                    changeOrder,
+                    rule.orderBy,
+                    rule.converter,
                     getTaskInfo,
                 );
             }
 
             if (title === "perf") {
-                return new AcPredictorPager(headerRow);
+                return new AcPredictorPager(
+                    goToPage,
+                    changeOrder,
+                    headerRow,
+                );
             }
 
         }
@@ -134,7 +164,7 @@ type TableType = "standings" | "results";
             }
         });
 
-        if (pager instanceof AcPredictorPager && __perfInputState) {
+        if (pager instanceof AcPredictorPager) {
             perfColumnInputElement = input;
 
             if (__perfInputState) {
@@ -176,6 +206,21 @@ type TableType = "standings" | "results";
         }
         vueObject.page = page;
         vueObject.watchIndex = -1;
+        await waitForVueJsNextTick();
+    }
+
+
+    async function changeOrder(orderBy: string, desc: boolean | null = null) {
+        if (orderBy === vueObject.orderBy) {
+            if (desc === null || desc === vueObject.desc) return;
+        } else {
+            if (desc === null) desc = false;
+        }
+        if (document.activeElement === perfColumnInputElement) {
+            keepPerfInputState(perfColumnInputElement);
+        }
+        vueObject.orderBy = orderBy;
+        if (desc !== null) vueObject.desc = desc;
         await waitForVueJsNextTick();
     }
 

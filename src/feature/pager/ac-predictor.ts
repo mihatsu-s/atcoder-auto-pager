@@ -6,9 +6,11 @@ import { waitForVueJsNextTick } from "../../lib/dom-util";
 export class AcPredictorPager extends Pager {
 
     constructor(
+        readonly paginationFn: (page: number) => Promise<unknown>,
+        readonly orderFn: (orderBy: string, desc?: boolean | null) => Promise<unknown>,
         readonly headerRow: HTMLTableRowElement,
     ) {
-        super();
+        super(paginationFn, orderFn);
     }
 
 
@@ -19,11 +21,7 @@ export class AcPredictorPager extends Pager {
 
         const rawTarget = this.convertTargetText(textToNumber, text);
 
-        if (vueStandings.orderBy !== "rank") {
-            vueStandings.orderBy = "rank";
-            vueStandings.desc = false;
-            await waitForVueJsNextTick();
-        }
+        await this.orderFn("rank");
 
         const desc = vueStandings.desc;
         const target = rawTarget * (desc ? 1 : -1);  // perf values are always ascending order
