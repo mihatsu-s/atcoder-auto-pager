@@ -1,5 +1,6 @@
 import { Pager } from "./base";
 import { binarySearch } from "../../lib/math-util";
+import { getTaskInfo } from "../get-task-info";
 
 export class StandingsOrderPager extends Pager {
 
@@ -8,27 +9,24 @@ export class StandingsOrderPager extends Pager {
         readonly orderFn: (orderBy: string, desc?: boolean | null) => Promise<unknown>,
         readonly orderBy: string,
         readonly textToOrderingTarget: (text: string, desc: boolean, taskInfo: TaskInfo) => AtCoderStandingsEntry,
-        readonly taskInfoGettingFn: () => TaskInfo,
     ) {
         super(paginationFn, orderFn);
     }
 
     
-    async exec(
-        text: string,
-        paginationFn: (page: number) => Promise<unknown>,
-    ) {
+    async exec(text: string) {
 
-        const target = this.convertTargetText(this.textToOrderingTarget, text, vueStandings.desc, this.taskInfoGettingFn());
+        const target = this.convertTargetText(this.textToOrderingTarget, text, vueStandings.desc, getTaskInfo());
 
         this.orderFn(this.orderBy);  // Do not wait for DOM updated
 
         const array = vueStandings.orderedStandings;
+        if (array.length === 0) return;
         const index = Math.min(
-            binarySearch(vueStandings.comp, array, target),
+            binarySearch(array, vueStandings.comp, target),
             array.length - 1
         );
-        await paginationFn(Math.floor(index / vueStandings.perPage) + 1);
+        await this.paginationFn(Math.floor(index / vueStandings.perPage) + 1);
         
     }
 

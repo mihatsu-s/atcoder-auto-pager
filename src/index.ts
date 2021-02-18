@@ -110,7 +110,6 @@ type TableType = "standings" | "results";
                     changeOrder,
                     rule.orderBy,
                     rule.converter,
-                    getTaskInfo,
                 );
             }
 
@@ -119,6 +118,11 @@ type TableType = "standings" | "results";
                     goToPage,
                     changeOrder,
                     headerRow,
+                    () => {
+                        if (perfColumnInputElement) {
+                            keepPerfInputState(perfColumnInputElement);
+                        }
+                    },
                 );
             }
 
@@ -173,7 +177,10 @@ type TableType = "standings" | "results";
                 input.selectionStart = __perfInputState.selectionStart;
                 input.selectionEnd = __perfInputState.selectionEnd;
                 input.classList.add(CLASS_NAMES.active);
-                __perfInputState = null;
+                
+                setTimeout(() => {
+                    __perfInputState = null;
+                }, 0);
             }
         }
 
@@ -185,7 +192,7 @@ type TableType = "standings" | "results";
 
         try {
             input.classList.add(CLASS_NAMES.active);
-            await pager.exec(input.value, goToPage);
+            await pager.exec(input.value);
         } catch (e) {
             input.classList.remove(CLASS_NAMES.active)
             input.classList.add(CLASS_NAMES.error);
@@ -251,9 +258,6 @@ type TableType = "standings" | "results";
     const headerRow = (await asyncQuerySelector("#vue-standings thead tr, #vue-results thead tr")) as HTMLTableRowElement;
 
     const tableType: TableType = typeof vueStandings === "undefined" ? "results" : "standings";
-
-    // Prepare the task info 
-    if (tableType === "standings") getTaskInfo();
 
     const vueObject = tableType === "standings" ? vueStandings : vueResults;
 

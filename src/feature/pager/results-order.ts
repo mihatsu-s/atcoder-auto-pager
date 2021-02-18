@@ -13,21 +13,19 @@ export class ResultsOrderPager extends Pager {
     }
 
 
-    async exec(
-        text: string,
-        paginationFn: (page: number) => Promise<unknown>,
-    ) {
+    async exec(text: string) {
 
         const target = this.convertTargetText(this.textToOrderingTarget, text, vueResults.desc);
 
         this.orderFn(this.orderBy);  // Do not wait for DOM updated
 
         const array = vueResults.orderedResults;
+        if (array.length === 0) return;
         const index = Math.min(
-            binarySearch(vueResults.comp, array, target),
+            binarySearch(array, vueResults.comp, target),
             array.length - 1
         );
-        await paginationFn(Math.floor(index / vueResults.perPage) + 1);
+        await this.paginationFn(Math.floor(index / vueResults.perPage) + 1);
 
     }
 

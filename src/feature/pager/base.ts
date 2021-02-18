@@ -5,10 +5,7 @@ export abstract class Pager {
         readonly orderFn: (orderBy: string, desc?: boolean | null) => Promise<unknown>,
     ) {}
 
-    abstract exec(
-        text: string,
-        paginationFn: (page: number) => Promise<unknown>,
-    ): Promise<unknown>;
+    abstract exec(text: string): Promise<unknown>;
 
     convertTargetText<Args extends any[], Res>(fn: (...args: Args) => Res, ...args: Args): Res {
         try {
