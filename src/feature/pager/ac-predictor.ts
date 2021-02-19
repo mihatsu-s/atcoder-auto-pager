@@ -10,10 +10,16 @@ let predictor_onPerfInput: Function | null = null;
 const addEventListener_raw = HTMLInputElement.prototype.addEventListener;
 (HTMLInputElement.prototype.addEventListener as any) =
     function (this: HTMLInputElement, type: string, fn: Function, ...args: unknown[]) {
-        if (this.id === "predictor-input-rank") {
-            predictor_onRankInput = fn;
-        } else if (this.id === "predictor-input-perf") {
-            predictor_onPerfInput = fn;
+        if (type === "keyup") {
+            if (this.id === "predictor-input-rank") {
+                predictor_onRankInput = fn;
+            } else if (this.id === "predictor-input-perf") {
+                predictor_onPerfInput = fn;
+            }
+
+            if (predictor_onRankInput && predictor_onPerfInput) {
+                HTMLInputElement.prototype.addEventListener = addEventListener_raw;
+            }
         }
         addEventListener_raw.call(this, type, fn, ...args);
     }
