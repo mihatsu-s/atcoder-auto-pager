@@ -4,8 +4,8 @@
   "description": "Support finding a page on AtCoder standings",
   "private": true,
   "scripts": {
-    "start": "webpack --watch",
-    "bundle": "webpack --mode production --no-devtool"
+    "start": "webpack watch --mode development --devtool inline-source-map --output-path ./dist/dev/",
+    "build": "webpack"
   },
   "repository": {
     "type": "git",
