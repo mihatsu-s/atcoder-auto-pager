@@ -1,4 +1,5 @@
 import { getTaskScore } from "../lib/atcoder/get-task-score";
+import { internalTimeToJsDate } from "../lib/atcoder/time";
 import { TaskInfo } from "./pager/standings-order";
 
 let cache: TaskInfo | null = null;
@@ -14,31 +15,47 @@ async function getAndRecordMaximumScore(taskAlphabet: string, taskScreenName: st
         const url = location.href.replace(/(?<=\/contests\/[^\/]*\/).*$/, "tasks/" + taskScreenName);
         const score = (await getTaskScore(url)) * 100;
         maximumScoreRecord[taskAlphabet] = score;
-        cache[taskAlphabet].maximumScore = score;
+        if (cache) {
+            cache[taskAlphabet].maximumScore = score;
+        }
     } catch (e) {
         console.error(e instanceof Error ? e.message : e);
     }
 }
 
 function generateTaskInfo(standings: AtCoderVueStandings["standings"]): TaskInfo {
+    const started = contestIsStarted();
+    if (!started) {
+        const timerId = setInterval(() => {
+            if (contestIsStarted()) {
+                for (const task of standings.TaskInfo) {
+                    getAndRecordMaximumScore(task.Assignment, task.TaskScreenName);
+                }
+                clearInterval(timerId);
+            }
+        }, 1000);
+    }
+
     const result: TaskInfo = {};
     for (const info of standings.TaskInfo) {
         const alphabet = info.Assignment;
         const screenName = info.TaskScreenName;
 
         let maximumScore = 0;
-        if (alphabet in maximumScoreRecord && maximumScoreRecord[alphabet] !== null) {
-            maximumScore = maximumScoreRecord[alphabet];
-        } else {
-            if (!(alphabet in maximumScoreRecord)) {
-                // Do not wait (request only)
-                getAndRecordMaximumScore(alphabet, screenName);
-            }
-
-            for (const entry of standings.StandingsData) {
-                const taskResults = entry.TaskResults;
-                if (screenName in taskResults) {
-                    maximumScore = Math.max(maximumScore, taskResults[screenName].Score);
+        if (started) {
+            if (alphabet in maximumScoreRecord && maximumScoreRecord[alphabet] !== null) {
+                maximumScore = maximumScoreRecord[alphabet];
+            } else {
+                if (!(alphabet in maximumScoreRecord)) {
+                    // Do not wait (request only)
+                    getAndRecordMaximumScore(alphabet, screenName);
+                }
+    
+                for (const entry of standings.StandingsData) {
+                    const taskResults = entry.TaskResults;
+                    if (screenName in taskResults) {
+                        maximumScore = Math.max(maximumScore, taskResults[screenName].Score);
+                    }
                 }
             }
         }
@@ -55,3 +72,8 @@ export function getTaskInfo() {
     previousStandings = currentStandings;
     return cache = generateTaskInfo(currentStandings);
 };
+
+
+function contestIsStarted() {
+    return internalTimeToJsDate(getServerTime()).getTime() >= internalTimeToJsDate(startTime).getTime();
+}

@@ -112,3 +112,12 @@ interface AtCoderResultsEntry {
 }
 
 declare const vueResults: AtCoderVueResults;
+
+
+/** Moment.js object */
+interface AtCoderInternalTimeObject {
+    toDate(): Date;
+}
+declare const startTime: AtCoderInternalTimeObject;
+declare const endTime: AtCoderInternalTimeObject;
+declare function getServerTime(): AtCoderInternalTimeObject;
