@@ -19,6 +19,7 @@ interface AtCoderVueStandings {
 
     orderBy: string;
     desc: boolean;
+    showInLogScale: boolean;
     readonly comp: (a: AtCoderStandingsEntry, b: AtCoderStandingsEntry) => number;
 }
 
@@ -73,6 +74,8 @@ interface AtCoderTaskInfo {
 }
 
 declare const vueStandings: AtCoderVueStandings;
+
+declare const LOG_BASE: number;
 
 
 

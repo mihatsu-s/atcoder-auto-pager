@@ -38,7 +38,7 @@ function veryFirstStandingsEntry(desc: boolean): AtCoderStandingsEntry {
         TotalResult: {
             Count: 1,
             Score: desc ? -Infinity : Infinity,
-            Elapsed: desc ? Infinity: -Infinity,
+            Elapsed: desc ? Infinity : -Infinity,
         },
         TaskResults: {},
     } as any;
@@ -78,7 +78,7 @@ export namespace TextToOrderingTarget {
          * @param taskAlphabet Set null for the total score
          */
         export function score(taskAlphabet: string | null) {
-            return function (text: string, desc: boolean, taskInfo: TaskInfo) {
+            return function (text: string, desc: boolean, showInLogScale: boolean, taskInfo: TaskInfo) {
 
                 // set default value
                 let elapsed = desc ? -Infinity : Infinity; // most bottom
@@ -99,14 +99,19 @@ export namespace TextToOrderingTarget {
                     elapsed = mmssToSeconds(parts[parts.length - 1]) * 1e9;
                     parts.pop();
                 } catch { }
-                
+
                 // read a point
                 if (parts.length === 1) {
                     point = 0;
                     let pointText = parts[0];
 
                     try {
-                        point = textToNumber(pointText) * 100;
+                        point = textToNumber(pointText);
+                        if (showInLogScale) {
+                            point = 100 * Math.exp(point * LOG_BASE);
+                        } else {
+                            point *= 100;
+                        }
                     } catch (e) {
                         if (taskAlphabet === null) {
 
@@ -134,7 +139,7 @@ export namespace TextToOrderingTarget {
                                 pointText += lastTaskAlphabet;
                             }
 
-                            for (let i = 0, imax = pointText.length; i < imax; ++i){
+                            for (let i = 0, imax = pointText.length; i < imax; ++i) {
                                 if (pointText[i + 1] === "-") {
                                     testTaskExistance(pointText[i]);
                                     testTaskExistance(pointText[i + 2]);

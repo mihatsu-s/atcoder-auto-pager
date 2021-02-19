@@ -8,7 +8,7 @@ export class StandingsOrderPager extends Pager {
         readonly paginationFn: (page: number) => Promise<unknown>,
         readonly orderFn: (orderBy: string, desc?: boolean | null) => Promise<unknown>,
         readonly orderBy: string,
-        readonly textToOrderingTarget: (text: string, desc: boolean, taskInfo: TaskInfo) => AtCoderStandingsEntry,
+        readonly textToOrderingTarget: (text: string, desc: boolean, showInLogScale: boolean, taskInfo: TaskInfo) => AtCoderStandingsEntry,
     ) {
         super(paginationFn, orderFn);
     }
@@ -16,7 +16,13 @@ export class StandingsOrderPager extends Pager {
     
     async exec(text: string) {
 
-        const target = this.convertTargetText(this.textToOrderingTarget, text, vueStandings.desc, getTaskInfo());
+        const target = this.convertTargetText(
+            this.textToOrderingTarget,
+            text,
+            vueStandings.desc,
+            vueStandings.showInLogScale,
+            getTaskInfo()
+        );
 
         this.orderFn(this.orderBy);  // Do not wait for DOM updated
 

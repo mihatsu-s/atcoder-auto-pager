@@ -78,7 +78,7 @@ type TableType = "standings" | "results";
 
             let rule: {
                 orderBy: string,
-                converter: (text: string, desc: boolean, taskInfo: TaskInfo) => AtCoderStandingsEntry,
+                converter: (text: string, desc: boolean, showInLogScale: boolean, taskInfo: TaskInfo) => AtCoderStandingsEntry,
             } | null = null;
 
             if (title === "順位" || title === "Rank") {
