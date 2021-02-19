@@ -1,3 +1,7 @@
+import { readRatedRange } from "../lib/atcoder/info-reader";
+import { fetchText } from "../lib/net-util";
+import { TextToOrderingTarget } from "./text-to-ordering-target";
+
 let cache: number[] | null = null;
 let previousStandings: AtCoderVueStandings["standings"] | null = null;
 
@@ -13,16 +17,35 @@ export function getRankToRatedRankMap(): number[] {
 
 function generateRankToRatedRankMap(standings: AtCoderVueStandings["standings"]): number[] {
     const data = standings.StandingsData;
+    const res0 = calculateRatedRanks(data, e => e.IsRated && e.TotalResult.Count > 0);
+    if (res0.ratedNum === 0 && ratedRange !== null) {
+        const res1 = calculateRatedRanks(
+            data,
+            e => ratedRange[0] <= e.OldRating && e.OldRating <= ratedRange[1] && e.TotalResult.Count > 0
+        );
+        return res1.map;
+    } else {
+        return res0.map;
+    }
+}
+
+
+function calculateRatedRanks(
+    data: ReadonlyArray<AtCoderStandingsEntry>,
+    ratedFn: (entry: AtCoderStandingsEntry) => boolean
+): { map: number[], ratedNum: number } {
+
     const size = data.length;
     const result = Array(size) as number[];
 
     let ratedRank = 0;
     let ratedNumOfCurrentRank = 0;
     let unrateds: number[] = [];
+    let _ratedAdded = 0;
     for (let i = 0; i < size; ++i) {
         const rank = data[i].Rank;
 
-        if (data[i].IsRated && data[i].TotalResult.Count > 0) {
+        if (ratedFn(data[i])) {
             ratedNumOfCurrentRank += 1;
         } else {
             unrateds.push(rank);
@@ -31,6 +54,7 @@ function generateRankToRatedRankMap(standings: AtCoderVueStandings["standings"])
         if (i === size - 1 || data[i + 1].Rank !== rank) {
             if (i === size - 1 && ratedNumOfCurrentRank === 0) {
                 ratedNumOfCurrentRank = 1;
+                _ratedAdded = 1;
             }
             if (ratedNumOfCurrentRank > 0) {
                 result[rank] = ((ratedRank + 1) + (ratedRank + ratedNumOfCurrentRank)) / 2;
@@ -61,5 +85,19 @@ function generateRankToRatedRankMap(standings: AtCoderVueStandings["standings"])
         }
     }
 
-    return result;
+    return {
+        map: result,
+        ratedNum: ratedRank - _ratedAdded
+    };
 }
+
+
+let ratedRange: [number, number] | null = null;
+(async () => {
+    const contestUrl = location.href.replace(/(?<=\/contests\/[^\/]+)\/.*$/g, "");
+    try {
+        ratedRange = readRatedRange(await fetchText(contestUrl));
+    } catch (e) {
+        console.error(`Cannot get the rated range from ${contestUrl}`);
+    }
+})();

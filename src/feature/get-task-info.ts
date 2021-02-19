@@ -1,5 +1,6 @@
-import { getTaskScore } from "../lib/atcoder/get-task-score";
+import { readTaskScore } from "../lib/atcoder/info-reader";
 import { internalTimeToJsDate } from "../lib/atcoder/time";
+import { fetchText } from "../lib/net-util";
 import { TaskInfo } from "./pager/standings-order";
 
 let cache: TaskInfo | null = null;
@@ -11,15 +12,15 @@ let maximumScoreRecord: {
 
 async function getAndRecordMaximumScore(taskAlphabet: string, taskScreenName: string) {
     maximumScoreRecord[taskAlphabet] = null;
+    const url = location.href.replace(/(?<=\/contests\/[^\/]*\/).*$/, "tasks/" + taskScreenName);
     try {
-        const url = location.href.replace(/(?<=\/contests\/[^\/]*\/).*$/, "tasks/" + taskScreenName);
-        const score = (await getTaskScore(url)) * 100;
+        const score = readTaskScore(await fetchText(url)) * 100;
         maximumScoreRecord[taskAlphabet] = score;
         if (cache) {
             cache[taskAlphabet].maximumScore = score;
         }
     } catch (e) {
-        console.error(e instanceof Error ? e.message : e);
+        console.error(`Cannot get the score point from ${url}`);
     }
 }
 
