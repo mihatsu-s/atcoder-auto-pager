@@ -24,17 +24,22 @@ async function getAndRecordMaximumScore(taskAlphabet: string, taskScreenName: st
     }
 }
 
+let contestStartTimerEnabled = false;
+
 function generateTaskInfo(standings: AtCoderVueStandings["standings"]): TaskInfo {
     const started = contestIsStarted();
     if (!started) {
-        const timerId = setInterval(() => {
-            if (contestIsStarted()) {
-                for (const task of standings.TaskInfo) {
-                    getAndRecordMaximumScore(task.Assignment, task.TaskScreenName);
+        if (!contestStartTimerEnabled) {
+            contestStartTimerEnabled = true;
+            const timerId = setInterval(() => {
+                if (contestIsStarted()) {
+                    for (const task of standings.TaskInfo) {
+                        getAndRecordMaximumScore(task.Assignment, task.TaskScreenName);
+                    }
+                    clearInterval(timerId);
                 }
-                clearInterval(timerId);
-            }
-        }, 1000);
+            }, 1000);
+        }
     }
 
     const result: TaskInfo = {};
