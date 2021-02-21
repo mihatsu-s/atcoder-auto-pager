@@ -16,10 +16,6 @@ const addEventListener_raw = HTMLInputElement.prototype.addEventListener;
             } else if (this.id === "predictor-input-perf") {
                 predictor_onPerfInput = fn;
             }
-
-            if (predictor_onRankInput && predictor_onPerfInput) {
-                HTMLInputElement.prototype.addEventListener = addEventListener_raw;
-            }
         }
         addEventListener_raw.call(this, type, fn, ...args);
     }
