@@ -19,3 +19,9 @@
     border-color: #6c6;
     color: #093;
 }
+
+.auto-pager-input.watching {
+    background-color: #cef;
+    border-color: #9bd;
+    color: #17f;
+}

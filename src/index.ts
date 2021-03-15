@@ -13,6 +13,7 @@ namespace CLASS_NAMES {
     export const input = "auto-pager-input";
     export const active = "active";
     export const error = "error";
+    export const watching = "watching";
 }
 
 type TableType = "standings" | "results";
@@ -160,11 +161,15 @@ type TableType = "standings" | "results";
         input.addEventListener("input", async () => {
             input.classList.remove(CLASS_NAMES.active);
             input.classList.remove(CLASS_NAMES.error);
+            if (watching && watching.element === input) {
+                input.classList.remove(CLASS_NAMES.watching);
+                watching = null;
+            }
         });
 
         input.addEventListener("keypress", async e => {
             if (e.code === "Enter") {
-                await execPagerFromInputElement(input, pager);
+                await execPagerFromInputElement(input, pager, tableType === "standings" && e.ctrlKey);
             }
         });
 
@@ -177,25 +182,54 @@ type TableType = "standings" | "results";
                 input.selectionStart = __perfInputState.selectionStart;
                 input.selectionEnd = __perfInputState.selectionEnd;
                 input.classList.add(CLASS_NAMES.active);
-                
+
                 setTimeout(() => {
                     __perfInputState = null;
                 }, 0);
+            }
+
+            if (watching && watching.perf !== null) {
+                input.classList.add(CLASS_NAMES.watching);
+                input.value = watching.perf.value;
+                watching = {
+                    element: input,
+                    pager: watching.perf.pager,
+                    perf: watching.perf,
+                }
             }
         }
 
     }
 
 
-    async function execPagerFromInputElement(input: HTMLInputElement, pager: Pager) {
+    async function execPagerFromInputElement(input: HTMLInputElement, pager: Pager, watch = false) {
         if (input.value.replace(/\s/g, "") === "") return;
 
+        input.classList.remove(CLASS_NAMES.error);
+        input.classList.add(CLASS_NAMES.active);
+        input.classList.remove(CLASS_NAMES.watching);
+
+        const preWatching = watching;
+        if (watch) {
+            input.classList.add(CLASS_NAMES.watching);
+            watching = {
+                element: input,
+                pager,
+                perf: pager instanceof AcPredictorPager ? { value: input.value, pager } : null,
+            };
+        } else if (watching && watching.element === input) {
+            watching = null;
+        }
+
         try {
-            input.classList.add(CLASS_NAMES.active);
             await pager.exec(input.value);
         } catch (e) {
-            input.classList.remove(CLASS_NAMES.active)
+            input.classList.remove(CLASS_NAMES.active);
+            input.classList.remove(CLASS_NAMES.watching);
             input.classList.add(CLASS_NAMES.error);
+
+            if (watch) watching = preWatching;
+
             if (e instanceof TargetTextConvertionError) {
                 // TODO: Show error message
                 // console.error(e);
@@ -232,8 +266,21 @@ type TableType = "standings" | "results";
     }
 
 
+    interface Watching {
+        element: HTMLInputElement;
+        pager: Pager;
+        perf: { value: string, pager: Pager } | null;
+    }
+    let watching: Watching | null = null;
+
+
     let perfColumnInputElement: HTMLInputElement | null = null;
-    let __perfInputState: { value: string, selectionStart: number, selectionEnd: number } | null = null;
+    interface __PerfInputState {
+        value: string;
+        selectionStart: number;
+        selectionEnd: number;
+    }
+    let __perfInputState: __PerfInputState | null = null;
     function keepPerfInputState(input: HTMLInputElement) {
         __perfInputState = {
             value: input.value,
@@ -245,10 +292,15 @@ type TableType = "standings" | "results";
 
     function resetPagers() {
         for (const input of headerRow.querySelectorAll("." + CLASS_NAMES.input) as NodeListOf<HTMLInputElement>) {
-            if (input.ownerDocument.activeElement === input) continue;
+            if (headerRow.ownerDocument.activeElement === input) continue;
             input.classList.remove(CLASS_NAMES.active);
             input.classList.remove(CLASS_NAMES.error);
+            input.classList.remove(CLASS_NAMES.watching);
             input.value = "";
+        }
+
+        if (watching && watching.element !== headerRow.ownerDocument.activeElement) {
+            watching = null;
         }
     }
 
@@ -276,5 +328,14 @@ type TableType = "standings" | "results";
     observeProperties(vueObject, ["page", "orderBy", "desc"], () => {
         resetPagers();
     });
+
+    if (tableType === "standings") {
+        // Detect updating
+        observeProperties(vueStandings, ["standings"], () => {
+            if (watching) {
+                execPagerFromInputElement(watching.element, watching.pager, true);
+            }
+        });
+    }
 
 })();

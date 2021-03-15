@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AtCoder Auto Pager
 // @namespace    https://github.com/mihatsu-s/
-// @version      1.0.2
+// @version      1.1.0
 // @description  Support finding a page on AtCoder standings
 // @author       Mihatsu
 // @license      MIT
